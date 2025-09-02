@@ -1,0 +1,9 @@
+apiVersion: gpu.devplatforms.io/v1alpha1
+kind: LeftoverNodePool
+metadata:
+  labels:
+    app.kubernetes.io/name: leftover
+    app.kubernetes.io/managed-by: kustomize
+  name: leftovernodepool-sample
+spec:
+  # TODO(user): Add fields here

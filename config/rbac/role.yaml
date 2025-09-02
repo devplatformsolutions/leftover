@@ -1,0 +1,32 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - gpu.devplatforms.io
+  resources:
+  - leftovernodepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - gpu.devplatforms.io
+  resources:
+  - leftovernodepools/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - gpu.devplatforms.io
+  resources:
+  - leftovernodepools/status
+  verbs:
+  - get
+  - patch
+  - update

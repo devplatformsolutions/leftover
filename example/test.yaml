@@ -1,0 +1,10 @@
+apiVersion: gpu.devplatforms.io/v1alpha1
+kind: LeftoverNodePool
+metadata:
+  name: quick-test
+spec:
+  region: eu-central-1
+  # families:
+  #   - p4
+  #   - g5
+  minGPUs: 4
