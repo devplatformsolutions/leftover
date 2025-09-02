@@ -48,7 +48,7 @@ type SpotQuote struct {
 // ListGPUInstanceTypes returns instance types (filtered by families and min GPUs) and their meta.
 func (c *Client) ListGPUInstanceTypes(ctx context.Context, families []string, minGPUs int) ([]string, map[string]InstanceMeta, error) {
 	p := ec2.NewDescribeInstanceTypesPaginator(c.EC2, &ec2.DescribeInstanceTypesInput{})
-	types := []string{}
+	instances := []string{}
 	meta := make(map[string]InstanceMeta)
 	for p.HasMorePages() {
 		page, err := p.NextPage(ctx)
@@ -68,7 +68,7 @@ func (c *Client) ListGPUInstanceTypes(ctx context.Context, families []string, mi
 			if gpuCount < int32(minGPUs) || !matchesFamily(string(it.InstanceType), families) {
 				continue
 			}
-			types = append(types, string(it.InstanceType))
+			instances = append(instances, string(it.InstanceType))
 			meta[string(it.InstanceType)] = InstanceMeta{
 				Type:      string(it.InstanceType),
 				VCPUs:     *it.VCpuInfo.DefaultCores,
@@ -78,7 +78,7 @@ func (c *Client) ListGPUInstanceTypes(ctx context.Context, families []string, mi
 			}
 		}
 	}
-	return types, meta, nil
+	return instances, meta, nil
 }
 
 func matchesFamily(instanceType string, families []string) bool {
