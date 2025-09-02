@@ -71,10 +71,10 @@ func (c *Client) ListGPUInstanceTypes(ctx context.Context, families []string, mi
 			types = append(types, string(it.InstanceType))
 			meta[string(it.InstanceType)] = InstanceMeta{
 				Type:      string(it.InstanceType),
-				VCPUs:     int32(*it.VCpuInfo.DefaultCores),
+				VCPUs:     *it.VCpuInfo.DefaultCores,
 				MemoryMiB: int32(*it.MemoryInfo.SizeInMiB),
 				GPUCount:  gpuCount,
-				GPUMemMiB: int32(*it.GpuInfo.TotalGpuMemoryInMiB),
+				GPUMemMiB: *it.GpuInfo.TotalGpuMemoryInMiB,
 			}
 		}
 	}
