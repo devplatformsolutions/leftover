@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sort"
 	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,13 +44,6 @@ type LeftoverNodePoolReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the LeftoverNodePool object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/reconcile
 func (r *LeftoverNodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
 
@@ -63,22 +57,59 @@ func (r *LeftoverNodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		return ctrl.Result{}, fmt.Errorf("creating AWS client for region %q: %w", cr.Spec.Region, err)
 	}
 
-	types, meta, err := awsCli.ListGPUInstanceTypes(ctx, cr.Spec.Families, cr.Spec.MinGPUs)
+	types, _, err := awsCli.ListGPUInstanceTypes(ctx, cr.Spec.Families, cr.Spec.MinGPUs)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("listing GPU instance types: %w", err)
 	}
-	fmt.Println("This is the meta", meta)
-	fmt.Println("These are the types", types)
 
 	quotes, err := awsCli.LatestSpotPrices(ctx, types, 10*time.Minute)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("getting latest spot prices: %w", err)
 	}
 
-	for _, quote := range quotes {
-		fmt.Println("This is the quote", quote.InstanceType, quote.Zone, quote.PriceUSD)
+	// Build scorer once
+	scorer, err := awsx.NewQuoteScorer(ctx, awsCli)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("building quote scorer: %w", err)
 	}
 
+	// Threshold and batch window (optimize price, then relax in tiers)
+	threshold := cr.Spec.MinSpotScore
+	batchWindow := 5
+
+	best, score, ok, err := scorer.PickCheapestInBatches(ctx, quotes, batchWindow, threshold)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("selecting cheapest in batches (score >= %d): %w", threshold, err)
+	}
+	if best == nil {
+		fmt.Println("No spot quotes available")
+		return ctrl.Result{}, nil
+	}
+	if ok {
+		fmt.Printf("Selected: %s %s $%.4f score %d at %s\n",
+			best.InstanceType, best.Zone, best.PriceUSD, score, best.Timestamp.Format(time.RFC3339))
+	} else {
+		fmt.Printf("No quote met score >= %d; cheapest is: %s %s $%.4f score %d at %s\n",
+			threshold, best.InstanceType, best.Zone, best.PriceUSD, score, best.Timestamp.Format(time.RFC3339))
+	}
+
+	// Print the top 5 with scores for visibility
+	entries := make([]awsx.SpotQuote, 0, len(quotes))
+	for _, q := range quotes {
+		entries = append(entries, q)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].PriceUSD < entries[j].PriceUSD })
+	limit := min(5, len(entries))
+	fmt.Println("Cheapest spot quotes:")
+	for i := range limit {
+		q := entries[i]
+		s, err := scorer.ScoreFor(ctx, q.InstanceType, q.Zone)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		fmt.Printf("%d) %s %s $%.4f %d at %s\n",
+			i+1, q.InstanceType, q.Zone, q.PriceUSD, s, q.Timestamp.Format(time.RFC3339))
+	}
 	return ctrl.Result{}, nil
 }
 

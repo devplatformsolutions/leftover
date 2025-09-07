@@ -8,3 +8,4 @@ spec:
   #   - p4
   #   - g5
   minGPUs: 4
+  minSpotScore: 3

@@ -33,6 +33,9 @@ type LeftoverNodePoolSpec struct {
 	TargetCount int32 `json:"targetCount,omitempty"`
 
 	// +kubebuilder:default=5
+	MinSpotScore int32 `json:"minSpotScore,omitempty"`
+
+	// +kubebuilder:default=5
 	// +kubebuilder:validation:Minimum=1
 	MaxInstanceTypes int `json:"maxInstanceTypes,omitempty"`
 

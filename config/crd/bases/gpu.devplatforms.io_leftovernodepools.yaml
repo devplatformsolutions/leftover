@@ -77,6 +77,10 @@ spec:
                 default: 1
                 minimum: 1
                 type: integer
+              minSpotScore:
+                default: 5
+                format: int32
+                type: integer
               onDemandFallback:
                 default: true
                 type: boolean

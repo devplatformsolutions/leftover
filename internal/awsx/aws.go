@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -159,7 +160,62 @@ func (c *Client) LatestSpotPrices(ctx context.Context, instanceTypes []string, w
 
 // PlacementScores returns a simple AZ -> score map (1..10, 0 if unknown).
 func (c *Client) PlacementScores(ctx context.Context, instanceTypes []string, targetCount int32) (map[string]int32, error) {
-	// TODO: GetSpotPlacementScores with InstanceTypes, TargetCapacity=targetCount
-	// Either region-level or AZ-level depending on API; map it to AZ score if available, else return region score.
-	return nil, nil
+	if targetCount <= 0 {
+		targetCount = 1
+	}
+
+	in := &ec2.GetSpotPlacementScoresInput{
+		SingleAvailabilityZone: aws.Bool(true),                    // AZ-level scores
+		TargetCapacity:         aws.Int32(targetCount),            // number of instances
+		TargetCapacityUnitType: types.TargetCapacityUnitTypeUnits, // interpret TargetCapacity as "units" (instances)
+		RegionNames:            []string{c.EC2.Options().Region},  // limit to this client’s region
+	}
+	if len(instanceTypes) > 0 {
+		in.InstanceTypes = instanceTypes
+	}
+
+	p := ec2.NewGetSpotPlacementScoresPaginator(c.EC2, in)
+
+	scores := make(map[string]int32)
+	for p.HasMorePages() {
+		out, err := p.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, s := range out.SpotPlacementScores {
+			if s.Score == nil {
+				continue
+			}
+			// For AZ-level requests, AvailabilityZoneId is set. Fall back to Region if AZ is absent.
+			var key string
+			if s.AvailabilityZoneId != nil && *s.AvailabilityZoneId != "" {
+				key = *s.AvailabilityZoneId
+			} else if s.Region != nil && *s.Region != "" {
+				key = *s.Region
+			} else {
+				continue
+			}
+			scores[key] = *s.Score
+		}
+	}
+	return scores, nil
+}
+
+func (c *Client) AZNameToID(ctx context.Context) (map[string]string, error) {
+	out, err := c.EC2.DescribeAvailabilityZones(ctx, &ec2.DescribeAvailabilityZonesInput{
+		AllAvailabilityZones: aws.Bool(false),
+		Filters: []types.Filter{
+			{Name: aws.String("state"), Values: []string{"available"}},
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string, len(out.AvailabilityZones))
+	for _, az := range out.AvailabilityZones {
+		if az.ZoneName != nil && az.ZoneId != nil && *az.ZoneName != "" && *az.ZoneId != "" {
+			m[*az.ZoneName] = *az.ZoneId
+		}
+	}
+	return m, nil
 }
