@@ -81,6 +81,12 @@ spec:
                 default: 5
                 format: int32
                 type: integer
+              nodeClassName:
+                type: string
+              nodeClassSelector:
+                additionalProperties:
+                  type: string
+                type: object
               onDemandFallback:
                 default: true
                 type: boolean

@@ -22,8 +22,10 @@ import (
 
 // LeftoverNodePoolSpec defines the desired state of LeftoverNodePool
 type LeftoverNodePoolSpec struct {
-	Region   string   `json:"region"`
-	Families []string `json:"families,omitempty"` // e.g. ["g5","g6","p5"]
+	Region            string            `json:"region"`
+	Families          []string          `json:"families,omitempty"`
+	NodeClassName     string            `json:"nodeClassName,omitempty"`
+	NodeClassSelector map[string]string `json:"nodeClassSelector,omitempty"`
 
 	// +kubebuilder:default=1
 	// +kubebuilder:validation:Minimum=1

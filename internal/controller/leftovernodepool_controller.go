@@ -29,9 +29,9 @@ import (
 
 	gpuv1alpha1 "github.com/devplatformsolutions/leftover/api/v1alpha1"
 	"github.com/devplatformsolutions/leftover/internal/awsx"
+	"github.com/go-logr/logr"
 )
 
-// LeftoverNodePoolReconciler reconciles a LeftoverNodePool object
 type LeftoverNodePoolReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
@@ -42,78 +42,106 @@ type LeftoverNodePoolReconciler struct {
 // +kubebuilder:rbac:groups=gpu.devplatforms.io,resources=leftovernodepools/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=gpu.devplatforms.io,resources=leftovernodepools/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
 func (r *LeftoverNodePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx).WithValues("leftovernodepool", req.NamespacedName)
 
 	var cr gpuv1alpha1.LeftoverNodePool
 	if err := r.Get(ctx, req.NamespacedName, &cr); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	if err := r.reconcileOnce(ctx, log, &cr); err != nil {
+		log.Error(err, "reconcileOnce failed")
+		return ctrl.Result{RequeueAfter: time.Minute}, err
+	}
+
+	requeue := time.Duration(cr.Spec.RequeueMinutes) * time.Minute
+	if requeue <= 0 {
+		requeue = 7 * time.Minute
+	}
+	log.Info("Requeue scheduled", "after", requeue.String())
+	return ctrl.Result{RequeueAfter: requeue}, nil
+}
+
+func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr.Logger, cr *gpuv1alpha1.LeftoverNodePool) error {
 	awsCli, err := r.AWSFactory.ForRegion(ctx, cr.Spec.Region)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("creating AWS client for region %q: %w", cr.Spec.Region, err)
+		return fmt.Errorf("creating AWS client for region %q: %w", cr.Spec.Region, err)
 	}
 
 	types, _, err := awsCli.ListGPUInstanceTypes(ctx, cr.Spec.Families, cr.Spec.MinGPUs)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("listing GPU instance types: %w", err)
+		return fmt.Errorf("listing GPU instance types: %w", err)
 	}
+	log.Info("Candidate instance types", "count", len(types))
 
 	quotes, err := awsCli.LatestSpotPrices(ctx, types, 10*time.Minute)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("getting latest spot prices: %w", err)
+		return fmt.Errorf("getting latest spot prices: %w", err)
 	}
+	log.Info("Collected latest spot quotes", "count", len(quotes))
 
-	// Build scorer once
-	scorer, err := awsx.NewQuoteScorer(ctx, awsCli)
+	targetCount := int32(1)
+	if cr.Spec.TargetCount > 0 {
+		targetCount = int32(cr.Spec.TargetCount)
+	}
+	scorer, err := awsx.NewQuoteScorer(ctx, awsCli, types, targetCount)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("building quote scorer: %w", err)
+		return fmt.Errorf("building quote scorer: %w", err)
 	}
 
-	// Threshold and batch window (optimize price, then relax in tiers)
 	threshold := cr.Spec.MinSpotScore
 	batchWindow := 5
 
 	best, score, ok, err := scorer.PickCheapestInBatches(ctx, quotes, batchWindow, threshold)
 	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("selecting cheapest in batches (score >= %d): %w", threshold, err)
+		return fmt.Errorf("selecting cheapest in batches (score >= %d): %w", threshold, err)
 	}
 	if best == nil {
-		fmt.Println("No spot quotes available")
-		return ctrl.Result{}, nil
+		log.Info("No spot quotes available")
+		return nil
 	}
 	if ok {
-		fmt.Printf("Selected: %s %s $%.4f score %d at %s\n",
-			best.InstanceType, best.Zone, best.PriceUSD, score, best.Timestamp.Format(time.RFC3339))
+		log.Info("Selected quote",
+			"instanceType", best.InstanceType,
+			"zone", best.Zone,
+			"priceUSD", best.PriceUSD,
+			"score", score,
+			"timestamp", best.Timestamp.Format(time.RFC3339))
 	} else {
-		fmt.Printf("No quote met score >= %d; cheapest is: %s %s $%.4f score %d at %s\n",
-			threshold, best.InstanceType, best.Zone, best.PriceUSD, score, best.Timestamp.Format(time.RFC3339))
+		log.Info("No quote met score threshold; using cheapest",
+			"threshold", threshold,
+			"instanceType", best.InstanceType,
+			"zone", best.Zone,
+			"priceUSD", best.PriceUSD,
+			"score", score,
+			"timestamp", best.Timestamp.Format(time.RFC3339))
 	}
 
-	// Print the top 5 with scores for visibility
 	entries := make([]awsx.SpotQuote, 0, len(quotes))
 	for _, q := range quotes {
 		entries = append(entries, q)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].PriceUSD < entries[j].PriceUSD })
 	limit := min(5, len(entries))
-	fmt.Println("Cheapest spot quotes:")
-	for i := range limit {
+	log.Info("Cheapest spot quotes", "count", limit)
+	for i := 0; i < limit; i++ {
 		q := entries[i]
 		s, err := scorer.ScoreFor(ctx, q.InstanceType, q.Zone)
 		if err != nil {
-			return ctrl.Result{}, err
+			return err
 		}
-		fmt.Printf("%d) %s %s $%.4f %d at %s\n",
-			i+1, q.InstanceType, q.Zone, q.PriceUSD, s, q.Timestamp.Format(time.RFC3339))
+		log.Info("Quote",
+			"rank", i+1,
+			"instanceType", q.InstanceType,
+			"zone", q.Zone,
+			"priceUSD", q.PriceUSD,
+			"score", s,
+			"timestamp", q.Timestamp.Format(time.RFC3339))
 	}
-	return ctrl.Result{}, nil
+	return nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *LeftoverNodePoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&gpuv1alpha1.LeftoverNodePool{}).

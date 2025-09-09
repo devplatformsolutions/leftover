@@ -92,6 +92,13 @@ func (in *LeftoverNodePoolSpec) DeepCopyInto(out *LeftoverNodePoolSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.NodeClassSelector != nil {
+		in, out := &in.NodeClassSelector, &out.NodeClassSelector
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.SubnetSelectorTags != nil {
 		in, out := &in.SubnetSelectorTags, &out.SubnetSelectorTags
 		*out = make(map[string]string, len(*in))

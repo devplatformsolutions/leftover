@@ -3,9 +3,11 @@ kind: LeftoverNodePool
 metadata:
   name: quick-test
 spec:
-  region: eu-central-1
+  region: us-east-1
+  #eu-central-1
   # families:
   #   - p4
   #   - g5
   minGPUs: 4
-  minSpotScore: 3
+  minSpotScore: 6
+  requeueMinutes: 7
