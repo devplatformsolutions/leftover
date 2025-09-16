@@ -104,7 +104,7 @@ func (c *Client) LatestSpotPrices(ctx context.Context, instanceTypes []string, w
 	start := now.Add(-window)
 
 	// Convert instance type strings to SDK enum values
-	var typeFilters []types.InstanceType
+	typeFilters := make([]types.InstanceType, 0, len(instanceTypes))
 	for _, it := range instanceTypes {
 		if it == "" {
 			continue
