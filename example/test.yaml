@@ -12,3 +12,20 @@ spec:
   minGPUs: 3
   minSpotScore: 6
   requeueMinutes: 7
+
+---
+
+apiVersion: gpu.devplatforms.io/v1alpha1
+kind: LeftoverNodePool
+metadata:
+  name: quick-test2
+spec:
+  region: us-east-1
+  nodeClassName: karpenter-quick-test
+  #eu-central-1
+  families:
+    - p4
+    - g5
+  minGPUs: 3
+  minSpotScore: 6
+  requeueMinutes: 7

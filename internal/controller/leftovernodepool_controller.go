@@ -178,7 +178,7 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 	sort.Slice(entries, func(i, j int) bool { return entries[i].PriceUSD < entries[j].PriceUSD })
 	limit := min(5, len(entries))
 	log.Info("Cheapest spot quotes", "count", limit)
-	for i := 0; i < limit; i++ {
+	for i := range entries[:limit] {
 		q := entries[i]
 		s, _ := scorer.ScoreFor(ctx, q.InstanceType, q.Zone)
 		log.Info("Quote", "rank", i+1, "instanceType", q.InstanceType, "zone", q.Zone, "priceUSD", q.PriceUSD, "score", s, "timestamp", q.Timestamp.Format(time.RFC3339))
@@ -189,7 +189,17 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 		capacityType = "spot"
 	}
 	poolName := fmt.Sprintf("leftover-%s", cr.Name)
-	if err := karpenterx.UpsertNodePool(ctx, r.Client, "leftover", poolName, nodeClassName, best.InstanceType, best.Zone, capacityType); err != nil {
+	if err := karpenterx.UpsertNodePool(
+		ctx,
+		r.Client,
+		"leftover",
+		poolName,
+		nodeClassName,
+		best.InstanceType,
+		best.Zone,
+		capacityType,
+		cr,
+	); err != nil {
 		r.setConditionNoWrite(cr, metav1.Condition{
 			Type:               gpuv1alpha1.ConditionReady,
 			Status:             metav1.ConditionFalse,

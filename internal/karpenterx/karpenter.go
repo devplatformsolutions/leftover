@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,54 +68,73 @@ func ResolveNodeClassName(ctx context.Context, c client.Client, log logr.Logger,
 }
 
 // UpsertNodePool creates or updates a Karpenter NodePool with a single chosen instance type + zone.
-func UpsertNodePool(ctx context.Context, c client.Client, fieldOwner, name, nodeClassName, instanceType, zone, capacityType string) error {
+func UpsertNodePool(ctx context.Context, c client.Client, fieldOwner, name, nodeClassName, instanceType, zone, capacityType string, owner client.Object) error {
 	if capacityType == "" {
 		capacityType = "spot"
 	}
 	u := &unstructured.Unstructured{}
 	u.SetGroupVersionKind(nodePoolGVK)
-	u.Object = map[string]any{
-		"apiVersion": "karpenter.sh/v1",
-		"kind":       "NodePool",
-		"metadata": map[string]any{
-			"name": name,
-			"labels": map[string]any{
-				"managed-by": "leftover",
+	u.SetName(name)
+	u.SetLabels(map[string]string{"managed-by": "leftover"})
+
+	if owner != nil {
+		// Ensure owner GVK (cluster-scoped)
+		gvk := owner.GetObjectKind().GroupVersionKind()
+		// Fallback if empty (can occur with unstructured)
+		if gvk.Empty() {
+			gvk = schema.GroupVersionKind{
+				Group:   "gpu.devplatforms.io",
+				Version: "v1alpha1",
+				Kind:    "LeftoverNodePool",
+			}
+		}
+		ctrl := true
+		block := true
+		u.SetOwnerReferences([]metav1.OwnerReference{
+			{
+				APIVersion:         gvk.GroupVersion().String(),
+				Kind:               gvk.Kind,
+				Name:               owner.GetName(),
+				UID:                owner.GetUID(),
+				Controller:         &ctrl,
+				BlockOwnerDeletion: &block,
 			},
-		},
-		"spec": map[string]any{
-			"template": map[string]any{
-				"spec": map[string]any{
-					"nodeClassRef": map[string]any{
-						"name":  nodeClassName,
-						"group": "karpenter.k8s.aws",
-						"kind":  "EC2NodeClass",
+		})
+	}
+
+	u.Object["spec"] = map[string]any{
+		"template": map[string]any{
+			"spec": map[string]any{
+				"nodeClassRef": map[string]any{
+					"name":  nodeClassName,
+					"group": "karpenter.k8s.aws",
+					"kind":  "EC2NodeClass",
+				},
+				"requirements": []any{
+					map[string]any{
+						"key":      "kubernetes.io/arch",
+						"operator": string(corev1.NodeSelectorOpIn),
+						"values":   []any{"amd64"},
 					},
-					"requirements": []any{
-						map[string]any{
-							"key":      "kubernetes.io/arch",
-							"operator": string(corev1.NodeSelectorOpIn),
-							"values":   []any{"amd64"},
-						},
-						map[string]any{
-							"key":      "karpenter.sh/capacity-type",
-							"operator": string(corev1.NodeSelectorOpIn),
-							"values":   []any{capacityType},
-						},
-						map[string]any{
-							"key":      "node.kubernetes.io/instance-type",
-							"operator": string(corev1.NodeSelectorOpIn),
-							"values":   []any{instanceType},
-						},
-						map[string]any{
-							"key":      "topology.kubernetes.io/zone",
-							"operator": string(corev1.NodeSelectorOpIn),
-							"values":   []any{zone},
-						},
+					map[string]any{
+						"key":      "karpenter.sh/capacity-type",
+						"operator": string(corev1.NodeSelectorOpIn),
+						"values":   []any{capacityType},
+					},
+					map[string]any{
+						"key":      "node.kubernetes.io/instance-type",
+						"operator": string(corev1.NodeSelectorOpIn),
+						"values":   []any{instanceType},
+					},
+					map[string]any{
+						"key":      "topology.kubernetes.io/zone",
+						"operator": string(corev1.NodeSelectorOpIn),
+						"values":   []any{zone},
 					},
 				},
 			},
 		},
 	}
+
 	return c.Patch(ctx, u, client.Apply, client.FieldOwner(fieldOwner), client.ForceOwnership)
 }
