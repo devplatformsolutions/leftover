@@ -1,0 +1,17 @@
+# ec2nodeclass.yaml
+apiVersion: karpenter.k8s.aws/v1
+kind: EC2NodeClass
+metadata:
+  name: karpenter-quick-test
+spec:
+  amiFamily: AL2
+  role: KarpenterNodeRole-CLUSTER_NAME
+  amiSelectorTerms:
+    - tags:
+        Name: KarpenterNode-CLUSTER_NAME
+  subnetSelectorTerms:
+    - tags:
+        kubernetes.io/cluster/CLUSTER_NAME: owned
+  securityGroupSelectorTerms:
+    - tags:
+        kubernetes.io/cluster/CLUSTER_NAME: owned

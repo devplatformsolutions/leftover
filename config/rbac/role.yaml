@@ -30,3 +30,23 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - karpenter.k8s.aws
+  resources:
+  - ec2nodeclasses
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - karpenter.sh
+  resources:
+  - nodepools
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
