@@ -95,7 +95,6 @@ func matchesFamily(instanceType string, families []string) bool {
 }
 
 // LatestSpotPrices gets last N minutes of quotes and keeps latest per (type, zone).
-// LatestSpotPrices gets last N minutes of quotes and keeps latest per (type, zone).
 func (c *Client) LatestSpotPrices(ctx context.Context, instanceTypes []string, window time.Duration) (map[[2]string]SpotQuote, error) {
 	if window <= 0 {
 		window = 15 * time.Minute

@@ -78,6 +78,7 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 	// Resolve EC2NodeClass
 	nodeClassName, err := karpenterx.ResolveNodeClassName(ctx, r.Client, log, cr.Spec.NodeClassName, cr.Spec.NodeClassSelector)
 	if err != nil {
+		log.Error(err, "Failed to resolve EC2NodeClass")
 		r.setConditionNoWrite(cr, metav1.Condition{
 			Type:               gpuv1alpha1.ConditionReady,
 			Status:             metav1.ConditionFalse,
@@ -90,6 +91,7 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 
 	awsCli, err := r.AWSFactory.ForRegion(ctx, cr.Spec.Region)
 	if err != nil {
+		log.Error(err, "aws client init failed", "region", cr.Spec.Region)
 		r.setConditionNoWrite(cr, metav1.Condition{
 			Type:               gpuv1alpha1.ConditionReady,
 			Status:             metav1.ConditionFalse,
@@ -102,6 +104,7 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 
 	types, _, err := awsCli.ListGPUInstanceTypes(ctx, cr.Spec.Families, cr.Spec.MinGPUs)
 	if err != nil {
+		log.Error(err, "listing GPU instance types failed")
 		r.setConditionNoWrite(cr, metav1.Condition{
 			Type:               gpuv1alpha1.ConditionReady,
 			Status:             metav1.ConditionFalse,
@@ -122,6 +125,7 @@ func (r *LeftoverNodePoolReconciler) reconcileOnce(ctx context.Context, log logr
 			Message:            err.Error(),
 			ObservedGeneration: cr.GetGeneration(),
 		})
+		log.Error(err, "Failed to get latest spot prices")
 		return r.updateStatusIfChanged(ctx, log, cr, origStatus)
 	}
 	log.Info("Collected latest spot quotes", "count", len(quotes))
