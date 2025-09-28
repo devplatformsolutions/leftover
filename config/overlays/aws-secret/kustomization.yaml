@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Build on top of the default stack (CRDs, RBAC, manager, webhooks, etc.)
+resources:
+  - ../../default
+  # Example credentials Secret (DO NOT COMMIT REAL CREDENTIALS)
+  - secret.yaml
+
+patches:
+  - path: manager_envfrom_patch.yaml

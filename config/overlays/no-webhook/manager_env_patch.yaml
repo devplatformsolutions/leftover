@@ -1,0 +1,13 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leftover-controller-manager
+  namespace: leftover-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: ENABLE_WEBHOOKS
+              value: "false"

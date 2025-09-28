@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: leftover-controller-manager
+  namespace: leftover-system
+spec:
+  template:
+    spec:
+      containers:
+        - name: manager
+          env:
+            - name: AWS_SDK_LOAD_CONFIG
+              value: "1"
+            # Disable IMDS to avoid hangs when IRSA isn't used or node lacks role
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
