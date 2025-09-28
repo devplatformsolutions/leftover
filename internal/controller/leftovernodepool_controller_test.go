@@ -51,7 +51,12 @@ var _ = Describe("LeftoverNodePool Controller", func() {
 						Name:      resourceName,
 						Namespace: "default",
 					},
-					// TODO(user): Specify other spec details if needed.
+					Spec: gpuv1alpha1.LeftoverNodePoolSpec{
+						Region:        "us-east-1",
+						NodeClassName: "dummy", // deliberately non-existent; controller should set Ready=False without error
+						MinGPUs:       1,
+						TargetCount:   1,
+					},
 				}
 				Expect(k8sClient.Create(ctx, resource)).To(Succeed())
 			}
