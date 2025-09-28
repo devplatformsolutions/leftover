@@ -1,0 +1,7 @@
+Leftover has been installed in namespace {{ .Release.Namespace }}.
+
+To check the controller:
+  kubectl -n {{ .Release.Namespace }} get deploy {{ include "leftover.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "leftover.fullname" . }} -c manager
+
+If you set aws.secretName, ensure the Secret exists in this namespace before pods start.

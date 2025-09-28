@@ -1,0 +1,49 @@
+image:
+  repository: ghcr.io/devplatformsolutions/leftover
+  tag: latest
+  pullPolicy: IfNotPresent
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+rbac:
+  create: true
+
+webhooks:
+  enabled: false
+
+certManager:
+  enabled: false
+
+metrics:
+  enabled: true
+  secure: true
+
+aws:
+  # One of these may be used
+  secretName: ""           # e.g., aws-credentials
+  irsaRoleArn: ""          # e.g., arn:aws:iam::<ACCOUNT_ID>:role/<ROLE>
+  disableIMDS: true
+
+pod:
+  annotations: {}
+  labels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+crds:
+  install: true

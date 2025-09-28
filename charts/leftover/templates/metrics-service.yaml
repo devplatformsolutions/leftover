@@ -1,0 +1,17 @@
+{{- if .Values.metrics.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "leftover.fullname" . }}-metrics
+  labels:
+    {{- include "leftover.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: https
+      port: 8443
+      protocol: TCP
+      targetPort: 8443
+  selector:
+    app.kubernetes.io/name: {{ include "leftover.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

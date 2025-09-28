@@ -79,6 +79,55 @@ NOTE: The operator currently expects an existing `EC2NodeClass` (you pass its na
 
 ---
 
+## Install with Helm
+
+This repo includes a starter Helm chart under `charts/leftover`.
+
+Quick start (local chart):
+
+```bash
+# 1) Vendor optional deps (cert-manager) if you plan to enable webhooks
+helm dependency update charts/leftover
+
+# 2) Install (Secret-based AWS creds, webhooks disabled)
+helm upgrade --install leftover charts/leftover \
+  --namespace leftover-system --create-namespace \
+  --set image.repository=ghcr.io/devplatformsolutions/leftover \
+  --set image.tag=latest \
+  --set aws.secretName=aws-credentials \
+  --set webhooks.enabled=false
+
+# If using IRSA instead of a Secret
+#   --set aws.irsaRoleArn=arn:aws:iam::<ACCOUNT_ID>:role/<ROLE>
+```
+
+Enable admission webhooks (requires cert-manager):
+
+```bash
+helm dependency update charts/leftover
+helm upgrade --install leftover charts/leftover \
+  -n leftover-system --create-namespace \
+  --set webhooks.enabled=true \
+  --set certManager.enabled=true
+```
+
+Notes:
+- CRDs: the chart bundles the `LeftoverNodePool` CRD and installs it by default (`crds.install=true`).
+  - To manage CRDs outside the chart, set `--set crds.install=false` and run `make install` (or ship CRDs separately).
+- cert-manager: included as an optional chart dependency, gated by `certManager.enabled`.
+  - Keep `webhooks.enabled=false` unless cert-manager is present, since the webhook server needs TLS.
+- Metrics: by default, metrics are enabled and served on 8443 (HTTPS). Disable with `--set metrics.enabled=false`.
+
+Key values (abridged):
+- `image.repository`, `image.tag`, `image.pullPolicy`
+- `aws.secretName` (envFrom), `aws.irsaRoleArn` (SA annotation), `aws.disableIMDS`
+- `webhooks.enabled`, `certManager.enabled`
+- `serviceAccount.create`, `serviceAccount.name`, `serviceAccount.annotations`
+- `resources`, `pod.annotations|labels|nodeSelector|tolerations|affinity`
+- `crds.install`
+
+---
+
 ## Install CRDs (Dev)
 
 ```bash
@@ -283,7 +332,7 @@ Add `pricing:GetProducts` later if OD pricing comparisons are introduced.
 * ⏭️ Hysteresis (price/score thresholds)
 * ⏭️ Optional On‑Demand fallback NodePool
 * ⏭️ Prometheus metrics & dashboards
-* ⏭️ Helm chart
+* ✅ Helm chart
 * ⏭️ Multi‑cluster/global optimization
 
 ---

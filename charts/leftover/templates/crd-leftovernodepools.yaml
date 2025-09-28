@@ -1,0 +1,4 @@
+{{- if .Values.crds.install }}
+{{- /* Inlined from config/crd/bases/gpu.devplatforms.io_leftovernodepools.yaml */ -}}
+{{- .Files.Get "crds/gpu.devplatforms.io_leftovernodepools.yaml" | nindent 0 -}}
+{{- end }}

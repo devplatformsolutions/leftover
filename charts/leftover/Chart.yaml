@@ -1,0 +1,22 @@
+apiVersion: v2
+name: leftover
+description: A Helm chart for the Leftover controller (GPU spot-aware Karpenter NodePool manager)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - kubernetes-operator
+  - karpenter
+  - aws
+  - gpu
+home: https://github.com/devplatformsolutions/leftover
+maintainers:
+  - name: devplatformsolutions
+    url: https://github.com/devplatformsolutions
+
+dependencies:
+  - name: cert-manager
+    repository: https://charts.jetstack.io
+    # Use a wide, safe range; pin if you need reproducibility
+    version: ">=1.14.0 <2.0.0"
+    condition: certManager.enabled

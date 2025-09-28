@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "leftover.fullname" . }}
+  labels:
+    {{- include "leftover.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "leftover.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+        {{- with .Values.pod.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "leftover.labels" . | nindent 8 }}
+        {{- with .Values.pod.labels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ default (include "leftover.fullname" .) .Values.serviceAccount.name }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: manager
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/manager"]
+          args:
+            - --leader-elect
+            - --health-probe-bind-address=:8081
+            {{- if and .Values.metrics.enabled .Values.metrics.secure }}
+            - --metrics-bind-address=:8443
+            - --metrics-secure=true
+            {{- else if .Values.metrics.enabled }}
+            - --metrics-bind-address=:8080
+            - --metrics-secure=false
+            {{- else }}
+            - --metrics-bind-address=0
+            {{- end }}
+          env:
+            - name: ENABLE_WEBHOOKS
+              value: {{ ternary "true" "false" .Values.webhooks.enabled | quote }}
+            - name: AWS_SDK_LOAD_CONFIG
+              value: "1"
+            {{- if .Values.aws.disableIMDS }}
+            - name: AWS_EC2_METADATA_DISABLED
+              value: "true"
+            {{- end }}
+          {{- if .Values.aws.secretName }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.aws.secretName }}
+          {{- end }}
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8081
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8081
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      {{- with .Values.pod.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pod.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pod.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
